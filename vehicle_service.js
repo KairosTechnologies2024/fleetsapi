@@ -7,7 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const vehicleRoutes= require('./routes/vehicle_routes');
-
+const authenticateMiddleWare= require('./config/authMiddleWare');
 const lockStatusMap = {}; 
 dotenv.config();
 const app = express();
@@ -149,6 +149,47 @@ console.log("logs map"+ logsMap.toString())
 // SSE endpoint to continuously stream logs as they are received from the device
 // Track active retrieve/stream connections
 const activeRetrieveStreams = {};
+
+
+
+
+app.get('/api/logs/:serial_number/retrieve/stream', (req, res) => {
+    const { serial_number } = req.params;
+    const command = "1";
+    const controlTopic = `ekco/v1/${serial_number}/logs/control`;
+    const dataTopic = `ekco/v1/${serial_number}/logs/data`;
+    req.socket.setTimeout(0);
+    res.set({
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+    });
+    res.flushHeaders();
+    const onMessage = (topic, message) => {
+        if (topic === dataTopic) {
+            const payload = message.toString();
+            res.write(`data: ${JSON.stringify({ topic, payload })}\n\n`);
+            console.log(`[SSE STREAM] ${serial_number} log:`, payload);
+        }
+    };
+    mqttClient.on('message', onMessage);
+    if (!activeRetrieveStreams[serial_number]) activeRetrieveStreams[serial_number] = [];
+    activeRetrieveStreams[serial_number].push({ res, onMessage });
+    mqttClient.publish(controlTopic, String(command), { retain: false }, (err) => {
+        if (err) {
+            res.write(`event: error\ndata: ${JSON.stringify({ error: 'Failed to publish control command', details: err.message })}\n\n`);
+            res.end();
+            mqttClient.off('message', onMessage);
+            activeRetrieveStreams[serial_number] = (activeRetrieveStreams[serial_number] || []).filter(r => r.res !== res);
+        }
+    });
+    req.on('close', () => {
+        mqttClient.off('message', onMessage);
+        if (activeRetrieveStreams[serial_number]) {
+            activeRetrieveStreams[serial_number] = activeRetrieveStreams[serial_number].filter(r => r.res !== res);
+        }
+    });
+});
 
 
 

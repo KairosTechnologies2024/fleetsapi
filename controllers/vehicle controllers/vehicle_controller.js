@@ -9,10 +9,10 @@ dotenv.config();
 
 // Shared in-memory objects
 const lockStatusMap = {};
-const logsMap = {};
-const activeStreams = {};
+/* const logsMap = {};
+const activeStreams = {}; */
 const activeRetrieveStreams = {};
-
+const { logsMap, activeStreams } = require('../../vehicle_service');
 // PostgreSQL pool setup
 const pool = new Pool({
     host: process.env.DB_HOST,
@@ -195,7 +195,7 @@ const stopStream = (req, res) => {
 
 const retrieveLogsStream = (req, res) => {
     const { serial_number } = req.params;
-    const command = req.query.command || "1";
+    const command = "1";
     const controlTopic = `ekco/v1/${serial_number}/logs/control`;
     const dataTopic = `ekco/v1/${serial_number}/logs/data`;
     req.socket.setTimeout(0);

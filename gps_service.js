@@ -5,14 +5,14 @@ const cors = require("cors");
 const http = require("http");
 const WebSocket = require("ws");
 const  gpsRoutes= require('./routes/gps_routes');
-
+const authenticateMiddleWare= require('./config/authMiddleWare');
 dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
 app.use(cors());
-app.use('/api', gpsRoutes);
+app.use('/api', authenticateMiddleWare,gpsRoutes);
 // Database connection
 const pool = new Pool({
     host: process.env.DB_HOST,
