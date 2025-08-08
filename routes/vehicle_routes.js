@@ -13,7 +13,7 @@ router.get('/logs/:serial_number', vehicleController.getLogs);
 router.get('/stream/:serial_number/:type', vehicleController.streamData);
 router.post('/stream/:serial_number/:type/stop', vehicleController.stopStream);
 //router.get('/logs/:serial_number/retrieve/stream', vehicleController.retrieveLogsStream);
-router.post('/logs/:serial_number/retrieve/stream/stop', vehicleController.stopRetrieveLogsStream);
+//router.post('/logs/:serial_number/retrieve/stream/stop', vehicleController.stopRetrieveLogsStream);
 router.post('/logs/:serial_number/retrieve', vehicleController.retrieveLogsSync); // If you want to use retrieveLogsPromise, swap here
 router.post('/logs/:serial_number/control', vehicleController.controlLogs);
 

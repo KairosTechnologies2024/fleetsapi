@@ -193,6 +193,30 @@ app.get('/logs/:serial_number/retrieve/stream', (req, res) => {
 
 
 
+
+app.post('/logs/:serial_number/retrieve/stream/stop', (req, res)=>{
+ const { serial_number } = req.params;
+    const controlTopic = `ekco/v1/${serial_number}/logs/control`;
+    mqttClient.publish(controlTopic, "0", { retain: false }, (err) => {
+        if (err) {
+            console.error(`Failed to send stop command to ${controlTopic}:`, err);
+        }
+    });
+    if (activeRetrieveStreams[serial_number] && activeRetrieveStreams[serial_number].length > 0) {
+        activeRetrieveStreams[serial_number].forEach(({ res: streamRes, onMessage }) => {
+            streamRes.write('event: end\ndata: Stream stopped by server\n\n');
+            streamRes.end();
+            mqttClient.off('message', onMessage);
+        });
+        activeRetrieveStreams[serial_number] = [];
+        res.json({ message: `Stopped retrieve/stream for ${serial_number} and sent stop command` });
+    } else {
+        res.status(404).json({ error: `No active retrieve/stream for ${serial_number}` });
+    }
+
+
+})
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Vehicle Service running on port: ${PORT}`);
