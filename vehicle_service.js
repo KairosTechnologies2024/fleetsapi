@@ -151,7 +151,7 @@ const activeRetrieveStreams = {};
 
 
 
-app.get('/api/logs/:serial_number/retrieve/stream', authenticateMiddleWare, (req, res) => {
+app.get('/api/logs/:serial_number/retrieve/stream', (req, res) => {
     const { serial_number } = req.params;
     const command = "1";
     const controlTopic = `ekco/v1/${serial_number}/logs/control`;
