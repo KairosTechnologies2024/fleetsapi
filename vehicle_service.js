@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3002;
 
 app.use(express.json());
 app.use(cors());
-app.use('/api', vehicleRoutes);
+app.use('/api', authenticateMiddleWare, vehicleRoutes);
 
 // PostgreSQL pool setup
 const pool = new Pool({
@@ -48,9 +48,6 @@ const pool = new Pool({
         console.error('Error initializing lock status table or loading data:', err);
     }
 })();
-
-
-
 
 
 
@@ -148,12 +145,13 @@ console.log("logs map"+ logsMap.toString())
 
 // SSE endpoint to continuously stream logs as they are received from the device
 // Track active retrieve/stream connections
+
 const activeRetrieveStreams = {};
 
 
 
 
-app.get('/api/logs/:serial_number/retrieve/stream', (req, res) => {
+app.get('/api/logs/:serial_number/retrieve/stream', authenticateMiddleWare, (req, res) => {
     const { serial_number } = req.params;
     const command = "1";
     const controlTopic = `ekco/v1/${serial_number}/logs/control`;
@@ -183,6 +181,8 @@ app.get('/api/logs/:serial_number/retrieve/stream', (req, res) => {
             activeRetrieveStreams[serial_number] = (activeRetrieveStreams[serial_number] || []).filter(r => r.res !== res);
         }
     });
+
+
     req.on('close', () => {
         mqttClient.off('message', onMessage);
         if (activeRetrieveStreams[serial_number]) {
