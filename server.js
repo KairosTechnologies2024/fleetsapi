@@ -7,6 +7,9 @@ class Communicator {
         this.vehicleServiceClient = axios.create({ 
             baseURL: 'http://localhost:3002/api',
         });
+        this.authServiceClient = axios.create({ 
+            baseURL: 'http://localhost:3003/api',
+        });
     }
 
     async getGps() {
@@ -15,6 +18,15 @@ class Communicator {
             return response.data;
         } catch (error) {
             console.error('Error fetching GPS data:', error.message);
+            return null;
+        }
+    }
+    async getAuth() {
+        try {
+            const response = await this.authServiceClient.get('/auth');
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching Auth data:', error.message);
             return null;
         }
     }

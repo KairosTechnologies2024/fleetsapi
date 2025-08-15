@@ -19,11 +19,14 @@ router.post('/logs/:serial_number/control', vehicleController.controlLogs);
 
 // Vehicle endpoints
 router.get('/vehicles', vehicleController.getVehicles);
+router.post('/vehicles/update-device-motors', vehicleController.updateDeviceMotors);
 router.get('/vehicles/:device_serial', vehicleController.getVehicleBySerial);
 router.get('/devices/commissioned', vehicleController.getCommissionedDevices);
 router.post('/vehicles/add', vehicleController.addVehicle);
 router.patch('/vehicles/unlink-device', vehicleController.unlinkDevice);
 router.post('/vehicles/relink-device', vehicleController.relinkDevice);
+
+
 
 // Trip reports
 router.get('/tripReports/:device_serial', vehicleController.getTripReports);

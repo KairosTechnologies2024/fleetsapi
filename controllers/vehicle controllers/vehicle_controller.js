@@ -376,14 +376,18 @@ const addVehicle = async (req, res) => {
         device_serial,
         vehicle_reg,
         company_id,
+        fleet_number , 
         motors = []
     } = req.body;
+
     if (!vehicle_name || !vehicle_model || !device_serial || !company_id) {
         return res.status(400).json({ error: "Missing required fields." });
     }
+
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
+
         const deviceExists = await client.query(
             "SELECT 1 FROM devices WHERE device_serial = $1",
             [device_serial]
@@ -392,6 +396,7 @@ const addVehicle = async (req, res) => {
             await client.query("ROLLBACK");
             return res.status(400).json({ error: "Device not found." });
         }
+
         const alreadyAssigned = await client.query(
             "SELECT 1 FROM vehicle_info WHERE device_serial = $1",
             [device_serial]
@@ -400,13 +405,16 @@ const addVehicle = async (req, res) => {
             await client.query("ROLLBACK");
             return res.status(400).json({ error: "Device already assigned to a vehicle." });
         }
+
         const vehicle_id = uuidv4();
+
         const insertQuery = `
-      INSERT INTO vehicle_info
-      (vehicle_id, vehicle_name, vehicle_model, vehicle_colour, vehicle_year, device_serial, vehicle_reg, company_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING *;
-    `;
+            INSERT INTO vehicle_info
+            (vehicle_id, vehicle_name, vehicle_model, vehicle_colour, vehicle_year, device_serial, vehicle_reg, company_id, fleet_number)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING *;
+        `;
+
         const values = [
             vehicle_id,
             vehicle_name,
@@ -415,25 +423,32 @@ const addVehicle = async (req, res) => {
             vehicle_year,
             device_serial,
             vehicle_reg,
-            company_id
+            company_id,
+            fleet_number 
         ];
+
         const result = await client.query(insertQuery, values);
+
         const motorSerials = motors
             .filter(m => m?.motor_serial)
             .map(m => BigInt(m.motor_serial));
+
         const numericDeviceSerial = BigInt(device_serial);
+
         if (motorSerials.length > 0) {
             await client.query(
                 `UPDATE actuators
-         SET device_serial = $1
-         WHERE motor_serial = ANY($2)`,
+                 SET device_serial = $1
+                 WHERE motor_serial = ANY($2)`,
                 [numericDeviceSerial, motorSerials]
             );
         }
+
         await client.query(
             "UPDATE devices SET commissioned = true, active = true WHERE device_serial = $1",
             [device_serial]
         );
+
         const healthCheck = await client.query(
             "SELECT 1 FROM device_health WHERE device_serial = $1",
             [numericDeviceSerial]
@@ -441,15 +456,17 @@ const addVehicle = async (req, res) => {
         if (healthCheck.rowCount === 0) {
             await client.query(
                 `INSERT INTO device_health (device_serial)
-                VALUES ($1)`,
+                 VALUES ($1)`,
                 [numericDeviceSerial]
             );
         }
+
         await client.query("COMMIT");
         res.status(201).json({
             message: "Vehicle added, device commissioned, motors linked, device_health updated",
             vehicle: result.rows[0]
         });
+
     } catch (err) {
         await client.query("ROLLBACK");
         console.error("Database error:", err);
@@ -461,6 +478,7 @@ const addVehicle = async (req, res) => {
         client.release();
     }
 };
+
 
 const unlinkDevice = async (req, res) => {
     const { device_serial } = req.body;
@@ -635,6 +653,83 @@ const getTripReports = async (req, res) => {
     }
 };
 
+
+const updateDeviceMotors = async (req, res) => {
+  const { motor_serial, device_serial } = req.body;
+
+  // Check if motor_serial and device_serial are provided
+  if (!motor_serial || !device_serial) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'motor_serial and device_serial are required.'
+    });
+  }
+
+  try {
+    // Start a transaction to ensure atomicity
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');  // Start transaction
+
+      // 1. Find the current motor that the device is associated with
+      const result = await client.query(
+        'SELECT motor_serial FROM actuators WHERE device_serial = $1',
+        [device_serial]
+      );
+
+      // If a device is already associated with another motor
+      if (result.rows.length > 0) {
+        const currentMotorSerial = result.rows[0].motor_serial;
+
+        // Nullify the current motor's device_serial
+        await client.query(
+          'UPDATE actuators SET device_serial = NULL WHERE motor_serial = $1',
+          [currentMotorSerial]
+        );
+      }
+
+      // 2. Now, associate the provided motor_serial with the device_serial
+      await client.query(
+        'UPDATE actuators SET device_serial = $1 WHERE motor_serial = $2',
+        [device_serial, motor_serial]
+      );
+
+      // Commit the transaction
+      await client.query('COMMIT');
+
+      // Send success response
+      res.json({
+        status: 'success',
+        message: 'Motor successfully swapped with new device.',
+        motor_serial: motor_serial,
+        new_device_serial: device_serial
+      });
+    } catch (err) {
+      // In case of error, rollback transaction
+      await client.query('ROLLBACK');
+      console.error('Error during motor swap:', err);
+      res.status(500).json({
+        status: 'error',
+        message: 'An error occurred while swapping the motor.',
+        error: err.message
+      });
+    } finally {
+      client.release(); // Release the client back to the pool
+    }
+  } catch (err) {
+    console.error('DB connection error:', err);
+    res.status(500).json({
+      status: 'error',
+      message: 'Database connection error.',
+      error: err.message}
+    )}};
+  
+
+
+
+
+
 module.exports = {
     lockVehicle,
     getLockStatus,
@@ -654,5 +749,6 @@ module.exports = {
     addVehicle,
     unlinkDevice,
     relinkDevice,
-    getTripReports
+    getTripReports,
+    updateDeviceMotors
 };

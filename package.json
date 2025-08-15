@@ -5,7 +5,8 @@
   "scripts": {
     "start:gps": "nodemon gps_service.js",
     "start:vehicles": "nodemon vehicle_service.js",
-    "start:all": "concurrently \"npm run start:gps\" \"npm run start:vehicles\""
+    "start:auth": "nodemon authentication_service.js",
+    "start:all": "concurrently \"npm run start:gps\" \"npm run start:vehicles\" \"npm run start:auth\""
   },
   "keywords": [],
   "author": "",
@@ -13,9 +14,11 @@
   "description": "",
   "dependencies": {
     "axios": "^1.8.4",
+    "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
     "mqtt": "^5.13.0",
     "node-fetch": "^3.3.2",
     "nodemon": "^3.1.10",
