@@ -37,6 +37,7 @@ const lockVehicle = async (req, res) => {
         return res.status(400).json({ error: "Missing or invalid parameters." });
     }
     const topic = `ekco/v1/${serial_number}/lock/control`;
+    const secondTopic = `ekco/${serial_number}/custom/v1/lockControl`;
     const payload = `${status}`;
     const mqttOptions = {
         username: process.env.MQTT_USERNAME,
@@ -45,28 +46,36 @@ const lockVehicle = async (req, res) => {
     };
     const client = mqtt.connect("mqtt://ekco-tracking.co.za:1883", mqttOptions);
     let responded = false;
+    let publishCount = 0;
+    let errors = [];
     client.on("connect", () => {
-        client.publish(topic, payload, { retain: false }, async (err) => {
-            if (!responded) {
-                responded = true;
-                if (err) {
-                    console.error("MQTT publish error:", err);
-                    res.status(500).json({ error: "Failed to publish to MQTT", details: err.message });
-                } else {
-                    lockStatusMap[serial_number] = status;
-                    try {
-                        await pool.query(
+        const handlePublish = (err, topicName) => {
+            publishCount++;
+            if (err) {
+                errors.push({ topic: topicName, error: err.message });
+            }
+            if (publishCount === 2) {
+                if (!responded) {
+                    responded = true;
+                    if (errors.length > 0) {
+                        console.error("MQTT publish errors:", errors);
+                        res.status(500).json({ error: "Failed to publish to MQTT topics", details: errors });
+                    } else {
+                        lockStatusMap[serial_number] = status;
+                        pool.query(
                             'INSERT INTO vehicle_lock_status (serial_number, status) VALUES ($1, $2) ON CONFLICT (serial_number) DO UPDATE SET status = EXCLUDED.status',
                             [serial_number, status]
-                        );
-                    } catch (dbErr) {
-                        console.error('Failed to persist lock status from API:', dbErr);
+                        ).catch(dbErr => {
+                            console.error('Failed to persist lock status from API:', dbErr);
+                        });
+                        res.json({ message: "Command sent successfully", topics: [topic, secondTopic], payload });
                     }
-                    res.json({ message: "Command sent successfully", topic, payload });
+                    client.end();
                 }
-                client.end();
             }
-        });
+        };
+        client.publish(topic, payload, { retain: false }, (err) => handlePublish(err, topic));
+        client.publish(secondTopic, payload, { retain: false }, (err) => handlePublish(err, secondTopic));
     });
     client.on("error", (err) => {
         if (!responded) {
